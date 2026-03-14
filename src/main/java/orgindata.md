@@ -23,14 +23,14 @@
 
 CREATE TABLE `tenant_config` (
 `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
-`tenant_id` VARCHAR(64) NOT NULL UNIQUE COMMENT '租户业务ID',
--- 1. 鉴权接入凭证 (你发给法务/OA/南北的)
+`tenant_id` VARCHAR(64) NOT NULL UNIQUE COMMENT '租户业务ID', （做租户隔离用，哪天想要换ClientId和secret也可以）
+-- 1. 鉴权接入凭证 (法务/OA/南北调用中间件)
 `client_id` VARCHAR(64) NOT NULL,
 `client_secret` VARCHAR(128) NOT NULL,
--- 2. 供应商核心配置 (诺诺的)
+-- 2. 供应商核心配置 (中间件调用e签宝、诺诺)
 `app_id` VARCHAR(128) NOT NULL,
 `app_secret` VARCHAR(128) NOT NULL,
--- 3、 erp的secret（中间件调用erp）
+-- 3、 erp的secret（中间件回调ERP）
 erp_id
 erp_secret
 -- 4. 租户管控
@@ -55,7 +55,7 @@ public class SimpleTenantAuthInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         String clientId = request.getHeader("X-Client-Id");
         String timestamp = request.getHeader("X-Timestamp");
-        String nonce = request.getHeader("X-Nonce"); // 新增
+        String nonce = request.getHeader("X-Nonce"); // 随机数，只能用一次
         String sign = request.getHeader("X-Sign");
 
         // 1. 校验 Header 必须完整

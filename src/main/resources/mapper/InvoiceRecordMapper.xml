@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.erpinvoicesass.mapper.InvoiceRecordMapper">
+    <resultMap id="BaseResultMap" type="com.example.erpinvoicesass.entity.InvoiceRecord">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="order_id" property="orderId" jdbcType="VARCHAR"/>
+        <result column="nuonuo_serial_no" property="nuonuoSerialNo" jdbcType="VARCHAR"/>
+        <result column="tenant_id" property="tenantId" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="VARCHAR" typeHandler="org.apache.ibatis.type.EnumTypeHandler"/>
+        <result column="req_payload" property="reqPayload" jdbcType="VARCHAR"/>
+        <result column="res_payload" property="resPayload" jdbcType="VARCHAR"/>
+        <result column="error_msg" property="errorMsg" jdbcType="VARCHAR"/>
+        <result column="retry_count" property="retryCount" jdbcType="INTEGER"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <select id="selectByOrderId" resultMap="BaseResultMap">
+        SELECT id, order_id, nuonuo_serial_no, tenant_id, status, req_payload, res_payload, error_msg, retry_count, created_at, updated_at
+        FROM invoice_record
+        WHERE order_id = #{orderId}
+    </select>
+
+    <select id="selectByNuonuoSerialNo" resultMap="BaseResultMap">
+        SELECT id, order_id, nuonuo_serial_no, tenant_id, status, req_payload, res_payload, error_msg, retry_count, created_at, updated_at
+        FROM invoice_record
+        WHERE nuonuo_serial_no = #{nuonuoSerialNo}
+    </select>
+
+    <insert id="insert" parameterType="com.example.erpinvoicesass.entity.InvoiceRecord">
+        INSERT INTO invoice_record (order_id, nuonuo_serial_no, tenant_id, status, req_payload, res_payload, error_msg, retry_count, created_at, updated_at)
+        VALUES (#{orderId}, #{nuonuoSerialNo}, #{tenantId}, #{status}, #{reqPayload}, #{resPayload}, #{errorMsg}, #{retryCount}, NOW(), NOW())
+    </insert>
+
+    <update id="updateForUpstreamRetry">
+        UPDATE invoice_record
+        SET req_payload = #{payload},
+            res_payload = NULL,
+            error_msg = NULL,
+            status = #{newStatus},
+            retry_count = 0,
+            updated_at = NOW()
+        WHERE order_id = #{orderId}
+          AND status = #{oldStatus}
+    </update>
+
+    <update id="updateStatusToProcessing">
+        UPDATE invoice_record
+        SET status = #{newStatus},
+            updated_at = NOW()
+        WHERE order_id = #{orderId}
+          AND status = #{oldStatus}
+    </update>
+
+    <select id="selectStuckWaitCallbackRecords" resultMap="BaseResultMap">
+        SELECT id, order_id, nuonuo_serial_no, tenant_id, status, req_payload, res_payload, error_msg, retry_count, created_at, updated_at
+        FROM invoice_record
+        WHERE status IN ('WAIT_CALLBACK', 'RED_WAIT_CALLBACK')
+          AND updated_at &lt; #{threshold}
+        LIMIT #{limit}
+    </select>
+
+    <update id="updateCallbackResult">
+        UPDATE invoice_record
+        SET status = #{newStatus},
+            res_payload = #{resPayload},
+            error_msg = #{errorMsg},
+            updated_at = NOW()
+        WHERE nuonuo_serial_no = #{nuonuoSerialNo}
+          AND status = #{oldStatus}
+    </update>
+
+    <select id="selectFailedRecordsForRetry" resultMap="BaseResultMap">
+        SELECT id, order_id, nuonuo_serial_no, tenant_id, status, req_payload, res_payload, error_msg, retry_count, created_at, updated_at
+        FROM invoice_record
+        WHERE status IN ('FAIL', 'RED_FAIL')
+          AND updated_at &lt; #{threshold}
+          AND retry_count &lt; #{maxRetryCount}
+        LIMIT #{limit}
+    </select>
+
+    <update id="updateForRetry">
+        UPDATE invoice_record
+        SET status = #{newStatus},
+            retry_count = retry_count + 1,
+            updated_at = NOW()
+        WHERE order_id = #{orderId}
+          AND status = #{oldStatus}
+    </update>
+</mapper>

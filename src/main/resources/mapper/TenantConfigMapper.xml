@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.erpinvoicesass.mapper.TenantConfigMapper">
+    <resultMap id="BaseResultMap" type="com.example.erpinvoicesass.entity.TenantConfig">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="tenant_id" property="tenantId" jdbcType="VARCHAR"/>
+        <result column="client_id" property="clientId" jdbcType="VARCHAR"/>
+        <result column="client_secret" property="clientSecret" jdbcType="VARCHAR"/>
+        <result column="app_id" property="appId" jdbcType="VARCHAR"/>
+        <result column="app_secret" property="appSecret" jdbcType="VARCHAR"/>
+        <result column="erp_id" property="erpId" jdbcType="VARCHAR"/>
+        <result column="erp_secret" property="erpSecret" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="INTEGER"/>
+        <result column="callback_url" property="callbackUrl" jdbcType="VARCHAR"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <select id="selectByClientId" resultMap="BaseResultMap">
+        SELECT id, tenant_id, client_id, client_secret, app_id, app_secret,
+               erp_id, erp_secret, status, callback_url, updated_at
+        FROM tenant_config
+        WHERE client_id = #{clientId}
+    </select>
+
+    <select id="selectByTenantId" resultMap="BaseResultMap">
+        SELECT id, tenant_id, client_id, client_secret, app_id, app_secret,
+               erp_id, erp_secret, status, callback_url, updated_at
+        FROM tenant_config
+        WHERE tenant_id = #{tenantId}
+    </select>
+</mapper>
