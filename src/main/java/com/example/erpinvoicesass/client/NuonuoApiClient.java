@@ -55,6 +55,8 @@ public class NuonuoApiClient {
         // 3. 发送加密请求
         String response = sendRequest(tenantConfig.getAppId(), tenantConfig.getAppSecret(), 
                 "nuonuo.ElectronInvoice.createInvoice", params);
+
+//        todo 开票成功后需要更新流水号
         
         log.info("蓝票提交成功，订单ID：{}，响应：{}", orderId, response);
     }
