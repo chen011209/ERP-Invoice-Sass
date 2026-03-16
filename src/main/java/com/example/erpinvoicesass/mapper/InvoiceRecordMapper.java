@@ -64,4 +64,15 @@ public interface InvoiceRecordMapper {
             "WHERE id = #{id} AND status = #{oldStatus} AND retry_count < #{maxRetry}")
     int updateForAutoRetry(@Param("id") Long id, @Param("oldStatus") String oldStatus, @Param("newStatus") String newStatus, @Param("maxRetry") int maxRetry);
 
+    /**
+     * 查询长时间处于INIT/RED_INIT状态的记录
+     * 用于监控和重试被限流阻塞的任务
+     */
+    @Select("SELECT * FROM invoice_record " +
+            "WHERE status IN ('INIT', 'RED_INIT') " +
+            "AND retry_count < 3 " +
+            "AND update_time <= #{threshold} " +
+            "LIMIT #{limit}")
+    List<InvoiceRecord> selectStuckInitRecords(@Param("threshold") LocalDateTime threshold, @Param("limit") int limit);
+
 }

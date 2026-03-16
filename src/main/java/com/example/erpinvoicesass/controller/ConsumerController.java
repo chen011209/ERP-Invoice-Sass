@@ -14,10 +14,10 @@ public class ConsumerController {
     @Resource
     private ConsumerContainerManager consumerContainerManager;
 
-    @PostMapping("/stop")
-    public String stopConsumer(@RequestParam String consumerGroup) {
+    @PostMapping("/suspend")
+    public String suspendConsumer(@RequestParam String consumerGroup) {
         try {
-            consumerContainerManager.stopConsumer(consumerGroup);
+            consumerContainerManager.suspendConsumer(consumerGroup);
             log.info("暂停消费成功，消费者组：{}", consumerGroup);
             return "暂停消费成功";
         } catch (Exception e) {
@@ -26,10 +26,10 @@ public class ConsumerController {
         }
     }
 
-    @PostMapping("/start")
-    public String startConsumer(@RequestParam String consumerGroup) {
+    @PostMapping("/resume")
+    public String resumeConsumer(@RequestParam String consumerGroup) {
         try {
-            consumerContainerManager.startConsumer(consumerGroup);
+            consumerContainerManager.resumeConsumer(consumerGroup);
             log.info("恢复消费成功，消费者组：{}", consumerGroup);
             return "恢复消费成功";
         } catch (Exception e) {
