@@ -29,6 +29,9 @@ public class SimpleTenantAuthInterceptor implements HandlerInterceptor {
         String nonce = request.getHeader("X-Nonce");
         String sign = request.getHeader("X-Sign");
 
+        //调用方先用appId secret 时间戳 nonce随机值计算一次签名，把签名传过来后
+        //我用appId查出对应secret也按同样哈希计算一次签名，比对签名是否一致
+
         if (clientId == null || timestamp == null || nonce == null || sign == null) {
             throw new RuntimeException("拒绝访问：缺少鉴权参数");
         }

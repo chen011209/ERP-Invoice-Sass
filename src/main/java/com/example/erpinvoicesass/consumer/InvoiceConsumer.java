@@ -51,6 +51,8 @@ public class InvoiceConsumer implements RocketMQListener<MessageExt> {
         }
 
 
+
+
         // 3. 调用诺诺API
         try {
             if (isBlue) {
