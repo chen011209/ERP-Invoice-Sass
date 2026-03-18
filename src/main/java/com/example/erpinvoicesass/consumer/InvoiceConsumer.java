@@ -30,7 +30,7 @@ public class InvoiceConsumer implements RocketMQListener<MessageExt> {
         String orderId = new String(messageExt.getBody());
         boolean isBlue = "BLUE".equals(tag);
 
-        // TODO: 2026/3/16 这里是应该重试，最后进死信队列吗 进死信会重试几次，进了怎么继续消费
+        //这里重试，重试太多了进死信队列不管了，长时间处于INIT的消息，会被定时任务重试，重试次数达到3次后，就停止重试
         // 1. 限流处理
         if (!nuonuoRateLimiter.tryAcquire()) {
             log.warn("触发限流，稍后重试，订单ID：{}", orderId);
