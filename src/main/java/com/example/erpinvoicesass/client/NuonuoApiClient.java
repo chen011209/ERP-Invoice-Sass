@@ -4,6 +4,7 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.alibaba.fastjson.JSON;
 import com.example.erpinvoicesass.context.TenantContext;
 import com.example.erpinvoicesass.entity.TenantConfig;
+import com.example.erpinvoicesass.mapper.InvoiceRecordMapper;
 import com.example.erpinvoicesass.mapper.TenantConfigMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
@@ -27,6 +28,9 @@ public class NuonuoApiClient {
 
     @Resource
     private TenantConfigMapper tenantConfigMapper;
+
+    @Resource
+    private InvoiceRecordMapper invoiceRecordMapper;
 
     @Resource
     private RestTemplate restTemplate;
@@ -56,7 +60,24 @@ public class NuonuoApiClient {
         String response = sendRequest(tenantConfig.getAppId(), tenantConfig.getAppSecret(), 
                 "nuonuo.ElectronInvoice.createInvoice", params);
 
-//        todo 开票成功后需要更新流水号
+        // 解析响应获取流水号
+        // 假设响应中包含流水号字段，实际解析逻辑需要根据诺诺API的响应格式调整
+        // 这里简化处理，实际项目中需要根据响应结构解析
+        String nuonuoSerialNo = "";
+        try {
+            com.alibaba.fastjson.JSONObject jsonResponse = JSON.parseObject(response);
+            // 假设流水号在响应的某个字段中
+            nuonuoSerialNo = jsonResponse.getString("serialNo");
+        } catch (Exception e) {
+            log.error("解析诺诺API响应失败", e);
+        }
+
+        // 更新流水号
+        if (nuonuoSerialNo != null && !nuonuoSerialNo.isEmpty()) {
+            String oldStatus = "PROCESSING";
+            invoiceRecordMapper.updateSerialNoAndStatus(orderId, oldStatus, oldStatus, nuonuoSerialNo);
+            log.info("更新蓝票流水号，订单ID：{}，流水号：{}", orderId, nuonuoSerialNo);
+        }
         
         log.info("蓝票提交成功，订单ID：{}，响应：{}", orderId, response);
     }
@@ -83,6 +104,25 @@ public class NuonuoApiClient {
         // 3. 发送加密请求
         String response = sendRequest(tenantConfig.getAppId(), tenantConfig.getAppSecret(), 
                 "nuonuo.ElectronInvoice.createRedInvoice", params);
+
+        // 解析响应获取流水号
+        // 假设响应中包含流水号字段，实际解析逻辑需要根据诺诺API的响应格式调整
+        // 这里简化处理，实际项目中需要根据响应结构解析
+        String nuonuoSerialNo = "";
+        try {
+            com.alibaba.fastjson.JSONObject jsonResponse = JSON.parseObject(response);
+            // 假设流水号在响应的某个字段中
+            nuonuoSerialNo = jsonResponse.getString("serialNo");
+        } catch (Exception e) {
+            log.error("解析诺诺API响应失败", e);
+        }
+
+        // 更新流水号
+        if (nuonuoSerialNo != null && !nuonuoSerialNo.isEmpty()) {
+            String oldStatus = "RED_PROCESSING";
+            invoiceRecordMapper.updateSerialNoAndStatus(orderId, oldStatus, oldStatus, nuonuoSerialNo);
+            log.info("更新红票流水号，订单ID：{}，流水号：{}", orderId, nuonuoSerialNo);
+        }
         
         log.info("红票提交成功，订单ID：{}，响应：{}", orderId, response);
     }

@@ -43,6 +43,11 @@ public interface InvoiceRecordMapper {
                       @Param("oldStatus") String oldStatus,
                       @Param("newStatus") String newStatus);
 
+    int updateSerialNoAndStatus(@Param("orderId") String orderId,
+                                @Param("oldStatus") String oldStatus,
+                                @Param("newStatus") String newStatus,
+                                @Param("nuonuoSerialNo") String nuonuoSerialNo);
+
     /**
      * 阶梯式自动重试查询核心 SQL
      * 策略:
@@ -54,13 +59,13 @@ public interface InvoiceRecordMapper {
             "WHERE status IN ('FAIL', 'RED_FAIL') " +
             "AND retry_count < 3 " +
             "AND ( " +
-            "  (retry_count = 0 AND update_time <= DATE_SUB(NOW(), INTERVAL 1 MINUTE)) OR " +
-            "  (retry_count = 1 AND update_time <= DATE_SUB(NOW(), INTERVAL 5 MINUTE)) OR " +
-            "  (retry_count = 2 AND update_time <= DATE_SUB(NOW(), INTERVAL 30 MINUTE)) " +
+            "  (retry_count = 0 AND updated_at <= DATE_SUB(NOW(), INTERVAL 1 MINUTE)) OR " +
+            "  (retry_count = 1 AND updated_at <= DATE_SUB(NOW(), INTERVAL 5 MINUTE)) OR " +
+            "  (retry_count = 2 AND updated_at <= DATE_SUB(NOW(), INTERVAL 30 MINUTE)) " +
             ") LIMIT #{limit}")
     List<InvoiceRecord> selectSmartAutoRetryRecords(@Param("limit") int limit);
 
-    @Update("UPDATE invoice_record SET status = #{newStatus}, retry_count = retry_count + 1, update_time = NOW() " +
+    @Update("UPDATE invoice_record SET status = #{newStatus}, retry_count = retry_count + 1, updated_at = NOW() " +
             "WHERE id = #{id} AND status = #{oldStatus} AND retry_count < #{maxRetry}")
     int updateForAutoRetry(@Param("id") Long id, @Param("oldStatus") String oldStatus, @Param("newStatus") String newStatus, @Param("maxRetry") int maxRetry);
 

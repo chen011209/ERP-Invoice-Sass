@@ -4,6 +4,7 @@ import com.example.erpinvoicesass.dto.ErpNotifyMsg;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -14,6 +15,8 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 
+import javax.annotation.Resource;
+
 /**
  * 中间件消费者监听回调任务，调用ERP
  */
@@ -23,6 +26,9 @@ import org.springframework.web.client.HttpServerErrorException;
 public class WebhookConsumer implements RocketMQListener<ErpNotifyMsg> {
 
     private final RestTemplate restTemplate;
+
+    @Resource
+    private RocketMQTemplate rocketMQTemplate;
 
     public WebhookConsumer() {
         this.restTemplate = new RestTemplate();
@@ -38,10 +44,14 @@ public class WebhookConsumer implements RocketMQListener<ErpNotifyMsg> {
             if (success) {
                 log.info("通知ERP成功，订单ID：{}", notifyMsg.getOrderId());
             } else {
-                log.warn("通知ERP失败，订单ID：{}", notifyMsg.getOrderId());
+                log.warn("通知ERP失败，订单ID：{}，准备放入MQ重试", notifyMsg.getOrderId());
+                // 回调失败，放入MQ重试
+                throw new RuntimeException("ERP回调失败，需要重试");
             }
         } catch (Exception e) {
-            log.error("通知ERP异常，订单ID：{}", notifyMsg.getOrderId(), e);
+            log.error("通知ERP异常，订单ID：{}，准备放入MQ重试", notifyMsg.getOrderId(), e);
+            // 抛出异常让MQ自动重试
+            throw e;
         }
     }
 

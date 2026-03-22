@@ -30,7 +30,8 @@ public class InvoiceConsumer implements RocketMQListener<MessageExt> {
         String orderId = new String(messageExt.getBody());
         boolean isBlue = "BLUE".equals(tag);
 
-        //这里重试，重试太多了进死信队列不管了，长时间处于INIT的消息，会被定时任务重试，重试次数达到3次后，就停止重试
+        // 这里重试，重试太多了进死信队列不管了，去控制台把死信消息拿出来重试
+        // 长时间处于INIT的消息，会被定时任务重试，重试次数达到3次后，就停止重试
         // 1. 限流处理
         if (!nuonuoRateLimiter.tryAcquire()) {
             log.warn("触发限流，稍后重试，订单ID：{}", orderId);
@@ -51,8 +52,6 @@ public class InvoiceConsumer implements RocketMQListener<MessageExt> {
         }
 
 
-
-
         // 3. 调用诺诺API
         try {
             if (isBlue) {
@@ -64,7 +63,10 @@ public class InvoiceConsumer implements RocketMQListener<MessageExt> {
             }
         } catch (Exception e) {
             log.error("调用诺诺API失败，订单ID：{}", orderId, e);
-            // 处理失败逻辑
+            // 处理失败逻辑：更新状态为FAIL
+            String oldProcessingStatus = isBlue ? InvoiceStatus.PROCESSING.name() : InvoiceStatus.RED_PROCESSING.name();
+            String failStatus = isBlue ? InvoiceStatus.FAIL.name() : InvoiceStatus.RED_FAIL.name();
+            invoiceRecordMapper.updateForRetry(orderId, oldProcessingStatus, failStatus);
         }
     }
 }

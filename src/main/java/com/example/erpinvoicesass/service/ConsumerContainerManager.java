@@ -10,6 +10,9 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * 用于控制消费者的启停，其实可以直接用mq的控制台进行启停
+ */
 @Slf4j
 @Component
 public class ConsumerContainerManager {

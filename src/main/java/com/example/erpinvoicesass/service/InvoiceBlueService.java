@@ -44,6 +44,7 @@ public class InvoiceBlueService {
                     return "单据已进入红冲生命周期，严禁再次发起正向开票。";
 
                 case FAIL:
+                    //retry_count重新设为0
                     int affected = invoiceRecordMapper.updateForUpstreamRetry(
                             orderId, payload, InvoiceStatus.FAIL.name(), InvoiceStatus.INIT.name());
                     if (affected == 1) {
@@ -60,6 +61,7 @@ public class InvoiceBlueService {
             record.setStatus(InvoiceStatus.INIT);
             record.setReqPayload(payload);
             record.setRetryCount(0);
+            //使用唯一索引约束只有一条插入
             invoiceRecordMapper.insert(record);
 
             rocketMQTemplate.convertAndSend("NuonuoInvoiceTopic:BLUE", orderId);

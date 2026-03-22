@@ -41,6 +41,7 @@ public class SimpleTenantAuthInterceptor implements HandlerInterceptor {
             throw new RuntimeException("拒绝访问：请求已过期");
         }
 
+        //nonce是随机值，防止重放
         String redisKey = "auth:nonce:" + clientId + ":" + nonce;
         Boolean absent = redisTemplate.opsForValue().setIfAbsent(redisKey, "1", 5, TimeUnit.MINUTES);
         if (Boolean.FALSE.equals(absent)) {

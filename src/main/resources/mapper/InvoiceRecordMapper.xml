@@ -87,4 +87,13 @@
         WHERE order_id = #{orderId}
           AND status = #{oldStatus}
     </update>
+
+    <update id="updateSerialNoAndStatus">
+        UPDATE invoice_record
+        SET nuonuo_serial_no = #{nuonuoSerialNo},
+            status = #{newStatus},
+            updated_at = NOW()
+        WHERE order_id = #{orderId}
+          AND status = #{oldStatus}
+    </update>
 </mapper>

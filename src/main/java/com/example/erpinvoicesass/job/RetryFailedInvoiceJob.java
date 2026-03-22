@@ -5,12 +5,15 @@ import com.example.erpinvoicesass.enums.InvoiceStatus;
 import com.example.erpinvoicesass.mapper.InvoiceRecordMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 定时扫描失败任务，自动重试
@@ -25,6 +28,8 @@ public class RetryFailedInvoiceJob {
     private InvoiceRecordMapper invoiceRecordMapper;
     @Resource
     private RocketMQTemplate rocketMQTemplate;
+    @Resource
+    private RedissonClient redissonClient;
 
     /**
      * 定时扫描重试失败任务
@@ -36,16 +41,34 @@ public class RetryFailedInvoiceJob {
         List<InvoiceRecord> failRecords = invoiceRecordMapper.selectSmartAutoRetryRecords(100);
 
         for (InvoiceRecord record : failRecords) {
-            boolean isBlue = record.getStatus() == InvoiceStatus.FAIL;
-            String oldStatus = isBlue ? InvoiceStatus.FAIL.name() : InvoiceStatus.RED_FAIL.name();
-            String newStatus = isBlue ? InvoiceStatus.INIT.name() : InvoiceStatus.RED_INIT.name();
+            // 分布式锁，防止多个实例同时处理同一个任务
+            String lockKey = "invoice:retry:" + record.getId();
+            RLock lock = redissonClient.getLock(lockKey);
+            
+            try {
+                // 尝试获取锁，最多等待1秒，持有锁最多5秒
+                if (lock.tryLock(1, 5, TimeUnit.SECONDS)) {
+                    boolean isBlue = record.getStatus() == InvoiceStatus.FAIL;
+                    String oldStatus = isBlue ? InvoiceStatus.FAIL.name() : InvoiceStatus.RED_FAIL.name();
+                    String newStatus = isBlue ? InvoiceStatus.INIT.name() : InvoiceStatus.RED_INIT.name();
 
-            int affected = invoiceRecordMapper.updateForAutoRetry(record.getId(), oldStatus, newStatus, maxRetry);
+                    // 使用乐观锁更新，确保状态和重试次数正确
+                    int affected = invoiceRecordMapper.updateForAutoRetry(record.getId(), oldStatus, newStatus, maxRetry);
 
-            if (affected == 1) {
-                String tag = isBlue ? "BLUE" : "RED";
-                rocketMQTemplate.convertAndSend("NuonuoInvoiceTopic:" + tag, record.getOrderId());
-                log.info("触发阶梯自动重试. OrderId:{}, 当前重试次数:{}/{}", record.getOrderId(), record.getRetryCount() + 1, maxRetry);
+                    if (affected == 1) {
+                        String tag = isBlue ? "BLUE" : "RED";
+                        rocketMQTemplate.convertAndSend("NuonuoInvoiceTopic:" + tag, record.getOrderId());
+                        log.info("触发阶梯自动重试. OrderId:{}, 当前重试次数:{}/{}", record.getOrderId(), record.getRetryCount() + 1, maxRetry);
+                    }
+                } else {
+                    log.debug("获取锁失败，跳过任务. OrderId:{}", record.getOrderId());
+                }
+            } catch (Exception e) {
+                log.error("自动重试失败. OrderId:{}", record.getOrderId(), e);
+            } finally {
+                if (lock.isHeldByCurrentThread()) {
+                    lock.unlock();
+                }
             }
         }
     }
@@ -56,6 +79,9 @@ public class RetryFailedInvoiceJob {
      * 注意：长期在INIT状态可能是因为一直限流过不去，导致消息进入了死信队列
      * 该任务用于监控和重试这些被限流阻塞的任务，避免任务永久卡住
      * 重试3次后不再重试，防止无限重试消耗资源
+     *
+     *
+     * 进入死信
      */
     @Scheduled(cron = "0 0/10 * * * ?") // 每10分钟扫描一次
     public void autoRetryStuckInitInvoices() {
@@ -65,20 +91,37 @@ public class RetryFailedInvoiceJob {
         List<InvoiceRecord> stuckRecords = invoiceRecordMapper.selectStuckInitRecords(threshold, 100);
 
         for (InvoiceRecord record : stuckRecords) {
-            boolean isBlue = record.getStatus() == InvoiceStatus.INIT;
-            String oldStatus = isBlue ? InvoiceStatus.INIT.name() : InvoiceStatus.RED_INIT.name();
-            String newStatus = isBlue ? InvoiceStatus.INIT.name() : InvoiceStatus.RED_INIT.name();
+            // 分布式锁，防止多个实例同时处理同一个任务
+            String lockKey = "invoice:retry:" + record.getId();
+            RLock lock = redissonClient.getLock(lockKey);
+            
+            try {
+                // 尝试获取锁，最多等待1秒，持有锁最多5秒
+                if (lock.tryLock(1, 5, TimeUnit.SECONDS)) {
+                    boolean isBlue = record.getStatus() == InvoiceStatus.INIT;
+                    String oldStatus = isBlue ? InvoiceStatus.INIT.name() : InvoiceStatus.RED_INIT.name();
+                    String newStatus = isBlue ? InvoiceStatus.INIT.name() : InvoiceStatus.RED_INIT.name();
 
-            //这里更新了重试次数+1
-            int affected = invoiceRecordMapper.updateForAutoRetry(record.getId(), oldStatus, newStatus, maxRetry);
+                    //这里更新了重试次数+1
+                    int affected = invoiceRecordMapper.updateForAutoRetry(record.getId(), oldStatus, newStatus, maxRetry);
 
-            if (affected == 1) {
-                String tag = isBlue ? "BLUE" : "RED";
-                rocketMQTemplate.convertAndSend("NuonuoInvoiceTopic:" + tag, record.getOrderId());
-                
+                    if (affected == 1) {
+                        String tag = isBlue ? "BLUE" : "RED";
+                        rocketMQTemplate.convertAndSend("NuonuoInvoiceTopic:" + tag, record.getOrderId());
 
-                log.warn("检测到长时间INIT状态任务，触发重试. OrderId:{}, 当前重试次数:{}/{}, 状态:{}", 
-                        record.getOrderId(), record.getRetryCount()+1, maxRetry, record.getStatus());
+
+                        log.warn("检测到长时间INIT状态任务，触发重试. OrderId:{}, 当前重试次数:{}/{}. 状态:{}",
+                                record.getOrderId(), record.getRetryCount()+1, maxRetry, record.getStatus());
+                    }
+                } else {
+                    log.debug("获取锁失败，跳过任务. OrderId:{}", record.getOrderId());
+                }
+            } catch (Exception e) {
+                log.error("自动重试失败. OrderId:{}", record.getOrderId(), e);
+            } finally {
+                if (lock.isHeldByCurrentThread()) {
+                    lock.unlock();
+                }
             }
         }
     }
